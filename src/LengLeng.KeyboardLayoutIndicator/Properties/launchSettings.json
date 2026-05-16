@@ -1,0 +1,12 @@
+﻿{
+  "profiles": {
+    "LengLeng.KeyboardLayoutIndicator": {
+      "commandName": "Project",
+      "commandLineArgs": "--diagnostics --config appsettings.Development.json",
+      "dotnetRunMessages": true,
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
