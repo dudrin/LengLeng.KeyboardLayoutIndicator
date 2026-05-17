@@ -24,6 +24,8 @@ internal static class DiagnosticsApplication
         Console.WriteLine($"Blink interval: {settings.BlinkIntervalMs} ms");
         Console.WriteLine($"Indicator on blink: {settings.IndicatorOnBlinkLitMs}/{settings.IndicatorOnBlinkDarkMs} ms");
         Console.WriteLine($"Indicator off blink: {settings.IndicatorOffBlinkLitMs}/{settings.IndicatorOffBlinkDarkMs} ms");
+        Console.WriteLine($"Agent timer interval: {settings.LayoutPollIntervalMs} ms");
+        Console.WriteLine($"Layout fallback poll interval: {settings.LayoutFallbackPollIntervalMs} ms");
         Console.WriteLine($"Layout detection strategy: {settings.LayoutDetectionStrategy}");
         Console.WriteLine($"Pause while modifiers down: {settings.PauseIndicatorWhileModifiersDown}");
         Console.WriteLine($"Pause while typing: {settings.PauseIndicatorWhileTyping}");

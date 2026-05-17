@@ -72,6 +72,11 @@ internal static class SettingsStore
                     settings.ManualEnglishIndicatorSearchRadiusPx = 600;
                 }
 
+                if (previousSchemaVersion < 8)
+                {
+                    settings.LayoutFallbackPollIntervalMs = 1000;
+                }
+
                 if (string.Equals(
                     settings.LayoutDetectionStrategy,
                     "TrayIndicatorForConsole",
@@ -126,6 +131,7 @@ internal static class SettingsStore
             || !json.Contains("\"indicatorOnBlinkDarkMs\"", StringComparison.OrdinalIgnoreCase)
             || !json.Contains("\"indicatorOffBlinkLitMs\"", StringComparison.OrdinalIgnoreCase)
             || !json.Contains("\"indicatorOffBlinkDarkMs\"", StringComparison.OrdinalIgnoreCase)
+            || !json.Contains("\"layoutFallbackPollIntervalMs\"", StringComparison.OrdinalIgnoreCase)
             || !json.Contains("\"pauseIndicatorWhileTyping\"", StringComparison.OrdinalIgnoreCase)
             || !json.Contains("\"typingPauseMs\"", StringComparison.OrdinalIgnoreCase)
             || !json.Contains("\"pauseIndicatorWhileMouseOverTaskbar\"", StringComparison.OrdinalIgnoreCase)

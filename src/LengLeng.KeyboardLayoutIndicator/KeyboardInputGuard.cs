@@ -12,10 +12,30 @@ internal static class KeyboardInputGuard
 
     public static bool IsModifierDown()
     {
-        return IsKeyDown(VirtualKeyShift)
-            || IsKeyDown(VirtualKeyControl)
-            || IsKeyDown(VirtualKeyMenu)
-            || IsKeyDown(VirtualKeyLeftWindows)
+        return IsShiftDown()
+            || IsControlDown()
+            || IsAltDown()
+            || IsWindowsKeyDown();
+    }
+
+    public static bool IsShiftDown()
+    {
+        return IsKeyDown(VirtualKeyShift);
+    }
+
+    public static bool IsControlDown()
+    {
+        return IsKeyDown(VirtualKeyControl);
+    }
+
+    public static bool IsAltDown()
+    {
+        return IsKeyDown(VirtualKeyMenu);
+    }
+
+    public static bool IsWindowsKeyDown()
+    {
+        return IsKeyDown(VirtualKeyLeftWindows)
             || IsKeyDown(VirtualKeyRightWindows);
     }
 

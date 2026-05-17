@@ -4,7 +4,7 @@ namespace LengLeng.KeyboardLayoutIndicator;
 
 internal sealed class IndicatorSettings
 {
-    public const int CurrentSchemaVersion = 7;
+    public const int CurrentSchemaVersion = 8;
 
     [JsonPropertyName("settingsSchemaVersion")]
     public int SettingsSchemaVersion { get; set; } = CurrentSchemaVersion;
@@ -38,6 +38,9 @@ internal sealed class IndicatorSettings
 
     [JsonPropertyName("layoutPollIntervalMs")]
     public int LayoutPollIntervalMs { get; set; } = 50;
+
+    [JsonPropertyName("layoutFallbackPollIntervalMs")]
+    public int LayoutFallbackPollIntervalMs { get; set; } = 1000;
 
     [JsonPropertyName("serviceSessionPollIntervalMs")]
     public int ServiceSessionPollIntervalMs { get; set; } = 5000;
@@ -152,6 +155,7 @@ internal sealed class IndicatorSettings
         IndicatorOffBlinkLitMs = Math.Clamp(IndicatorOffBlinkLitMs, 40, 2000);
         IndicatorOffBlinkDarkMs = Math.Clamp(IndicatorOffBlinkDarkMs, 80, 3000);
         LayoutPollIntervalMs = Math.Clamp(LayoutPollIntervalMs, 50, 2000);
+        LayoutFallbackPollIntervalMs = Math.Clamp(LayoutFallbackPollIntervalMs, 200, 10000);
         ServiceSessionPollIntervalMs = Math.Clamp(ServiceSessionPollIntervalMs, 1000, 60000);
         ModifierReleasePauseMs = Math.Clamp(ModifierReleasePauseMs, 0, 2000);
         TypingPauseMs = Math.Clamp(TypingPauseMs, 100, 5000);

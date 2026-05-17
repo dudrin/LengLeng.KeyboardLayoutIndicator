@@ -2,13 +2,29 @@ namespace LengLeng.KeyboardLayoutIndicator;
 
 internal sealed class KeyboardLayoutAgent
 {
+    private const uint VirtualKeyShift = 0x10;
+    private const uint VirtualKeyLeftShift = 0xA0;
+    private const uint VirtualKeyRightShift = 0xA1;
+    private const uint VirtualKeyControl = 0x11;
+    private const uint VirtualKeyLeftControl = 0xA2;
+    private const uint VirtualKeyRightControl = 0xA3;
+    private const uint VirtualKeyMenu = 0x12;
+    private const uint VirtualKeyLeftMenu = 0xA4;
+    private const uint VirtualKeyRightMenu = 0xA5;
+    private const uint VirtualKeySpace = 0x20;
+
     private readonly string _settingsPath;
     private readonly KeyboardLayoutReader _layoutReader = new();
     private readonly TaskbarHoverDetector _taskbarHoverDetector = new();
     private readonly object _stateSync = new();
+    private readonly AutoResetEvent _wakeRequested = new(false);
 
     private IndicatorSettings _settings;
     private DateTime _settingsLastWriteUtc;
+    private volatile bool _layoutRefreshRequested = true;
+    private LayoutSnapshot _currentLayout = LayoutSnapshot.Unknown;
+    private bool _currentLayoutIsEnglish = true;
+    private DateTime _nextFallbackLayoutRefreshUtc = DateTime.MinValue;
     private LayoutSnapshot _lastLoggedLayout = LayoutSnapshot.Unknown;
     private bool? _lastLoggedIsEnglish;
     private ScrollLockController _indicatorController;
@@ -20,6 +36,7 @@ internal sealed class KeyboardLayoutAgent
     private DateTime _nextBlinkTransitionUtc;
     private bool _lastBlinkBaseState;
     private DateTime _taskbarHoverSuppressUntilUtc;
+    private DateTime _nextKeyboardLayoutRefreshRequestUtc = DateTime.MinValue;
 
     public KeyboardLayoutAgent(string? settingsPath)
     {
@@ -35,24 +52,31 @@ internal sealed class KeyboardLayoutAgent
             _settingsPath,
             BeforePhysicalIndicatorKeyDown,
             AfterPhysicalIndicatorKeyUp,
-            BeforePhysicalNonIndicatorKeyDown);
+            BeforePhysicalNonIndicatorKeyDown,
+            RequestLayoutRefresh);
         trayIcon.Start();
         trayIcon.SetWatchedVirtualKey(_settings.IndicatorVirtualKey);
 
         try
         {
+            using var cancellationRegistration = cancellationToken.Register(RequestWake);
+
             while (!cancellationToken.IsCancellationRequested && !AgentStopRequested())
             {
+                var now = DateTime.UtcNow;
                 if (ReloadSettingsIfChanged())
                 {
                     trayIcon.SetWatchedVirtualKey(_settings.IndicatorVirtualKey);
+                    RequestLayoutRefresh();
                 }
 
-                var layout = _layoutReader.GetForegroundLayout(_settings);
-                var isEnglish = _settings.IsEnglish(layout);
-                LogLayoutChange(layout, isEnglish);
+                if (ShouldRefreshLayout(now))
+                {
+                    RefreshLayout(now);
+                }
 
-                var now = DateTime.UtcNow;
+                var layout = _currentLayout;
+                var isEnglish = _currentLayoutIsEnglish;
                 UpdatePhysicalIndicatorKeyState(now);
 
                 if (_settings.PauseIndicatorWhileModifiersDown && KeyboardInputGuard.IsModifierDown())
@@ -70,7 +94,7 @@ internal sealed class KeyboardLayoutAgent
                         _settings.IndicatorKey,
                         GetUserIndicatorState(),
                         _indicatorController.GetState());
-                    Sleep(_settings.LayoutPollIntervalMs, cancellationToken);
+                    WaitForNextTick(now, isEnglish, taskbarHoverPauseActive);
                     continue;
                 }
 
@@ -83,7 +107,7 @@ internal sealed class KeyboardLayoutAgent
                         _settings.IndicatorKey,
                         GetUserIndicatorState(),
                         _indicatorController.GetState());
-                    Sleep(_settings.LayoutPollIntervalMs, cancellationToken);
+                    WaitForNextTick(now, isEnglish, taskbarHoverPauseActive);
                     continue;
                 }
 
@@ -103,7 +127,7 @@ internal sealed class KeyboardLayoutAgent
                     GetUserIndicatorState(),
                     _indicatorController.GetState());
 
-                Sleep(_settings.LayoutPollIntervalMs, cancellationToken);
+                WaitForNextTick(now, isEnglish, taskbarHoverPauseActive);
             }
         }
         finally
@@ -161,6 +185,37 @@ internal sealed class KeyboardLayoutAgent
         return true;
     }
 
+    private void RequestLayoutRefresh()
+    {
+        _layoutRefreshRequested = true;
+        RequestWake();
+    }
+
+    private void RequestWake()
+    {
+        _wakeRequested.Set();
+    }
+
+    private bool ShouldRefreshLayout(DateTime now)
+    {
+        return _layoutRefreshRequested
+            || !_currentLayout.IsKnown
+            || now >= _nextFallbackLayoutRefreshUtc;
+    }
+
+    private void RefreshLayout(DateTime now)
+    {
+        var layout = _layoutReader.GetForegroundLayout(_settings);
+        var isEnglish = _settings.IsEnglish(layout);
+
+        _currentLayout = layout;
+        _currentLayoutIsEnglish = isEnglish;
+        _layoutRefreshRequested = false;
+        _nextFallbackLayoutRefreshUtc = now.AddMilliseconds(_settings.LayoutFallbackPollIntervalMs);
+
+        LogLayoutChange(layout, isEnglish);
+    }
+
     private void LogLayoutChange(LayoutSnapshot layout, bool isEnglish)
     {
         if (!_settings.LogLayoutChanges
@@ -197,6 +252,7 @@ internal sealed class KeyboardLayoutAgent
         FileLog.Write(
             "agent",
             $"{_indicatorController.DisplayName} user state changed to {(userIndicatorState ? "On" : "Off")}.");
+        RequestLayoutRefresh();
         return true;
     }
 
@@ -212,10 +268,13 @@ internal sealed class KeyboardLayoutAgent
         }
 
         _indicatorController.TrySetState(userIndicatorState);
+        RequestLayoutRefresh();
     }
 
     private void BeforePhysicalNonIndicatorKeyDown(uint virtualKey)
     {
+        RequestLayoutRefreshForKeyboardInput(virtualKey);
+
         if (!_settings.PauseIndicatorWhileTyping)
         {
             return;
@@ -232,6 +291,66 @@ internal sealed class KeyboardLayoutAgent
         }
 
         controller.TrySetState(userIndicatorState);
+    }
+
+    private void RequestLayoutRefreshForKeyboardInput(uint virtualKey)
+    {
+        if (!CouldBeLayoutSwitchKey(virtualKey))
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        lock (_stateSync)
+        {
+            if (now < _nextKeyboardLayoutRefreshRequestUtc)
+            {
+                return;
+            }
+
+            _nextKeyboardLayoutRefreshRequestUtc = now.AddMilliseconds(250);
+        }
+
+        RequestLayoutRefresh();
+        _ = Task.Delay(120).ContinueWith(
+            _ => RequestLayoutRefresh(),
+            TaskScheduler.Default);
+    }
+
+    private static bool CouldBeLayoutSwitchKey(uint virtualKey)
+    {
+        if (IsShiftKey(virtualKey))
+        {
+            return KeyboardInputGuard.IsAltDown() || KeyboardInputGuard.IsControlDown();
+        }
+
+        if (IsAltKey(virtualKey) || IsControlKey(virtualKey))
+        {
+            return KeyboardInputGuard.IsShiftDown();
+        }
+
+        return virtualKey == VirtualKeySpace && KeyboardInputGuard.IsWindowsKeyDown();
+    }
+
+    private static bool IsShiftKey(uint virtualKey)
+    {
+        return virtualKey == VirtualKeyShift
+            || virtualKey == VirtualKeyLeftShift
+            || virtualKey == VirtualKeyRightShift;
+    }
+
+    private static bool IsAltKey(uint virtualKey)
+    {
+        return virtualKey == VirtualKeyMenu
+            || virtualKey == VirtualKeyLeftMenu
+            || virtualKey == VirtualKeyRightMenu;
+    }
+
+    private static bool IsControlKey(uint virtualKey)
+    {
+        return virtualKey == VirtualKeyControl
+            || virtualKey == VirtualKeyLeftControl
+            || virtualKey == VirtualKeyRightControl;
     }
 
     private void UpdatePhysicalIndicatorKeyState(DateTime now)
@@ -346,8 +465,46 @@ internal sealed class KeyboardLayoutAgent
         return File.Exists(AppPaths.AgentStopSignalPath);
     }
 
-    private static void Sleep(int milliseconds, CancellationToken cancellationToken)
+    private void WaitForNextTick(DateTime now, bool isEnglish, bool taskbarHoverPauseActive)
     {
-        cancellationToken.WaitHandle.WaitOne(milliseconds);
+        var waitMs = isEnglish
+            ? 250
+            : GetNonEnglishWaitMilliseconds(now);
+
+        if (taskbarHoverPauseActive)
+        {
+            waitMs = Math.Min(waitMs, 80);
+        }
+
+        if (now < _suppressIndicatorOutputUntilUtc)
+        {
+            waitMs = Math.Min(waitMs, MillisecondsUntil(now, _suppressIndicatorOutputUntilUtc));
+        }
+
+        if (now < _nextFallbackLayoutRefreshUtc)
+        {
+            waitMs = Math.Min(waitMs, MillisecondsUntil(now, _nextFallbackLayoutRefreshUtc));
+        }
+        else
+        {
+            waitMs = 0;
+        }
+
+        _wakeRequested.WaitOne(Math.Clamp(waitMs, 10, 1000));
+    }
+
+    private int GetNonEnglishWaitMilliseconds(DateTime now)
+    {
+        if (_blinkInitialized && now < _nextBlinkTransitionUtc)
+        {
+            return MillisecondsUntil(now, _nextBlinkTransitionUtc);
+        }
+
+        return Math.Clamp(_settings.LayoutPollIntervalMs, 20, 250);
+    }
+
+    private static int MillisecondsUntil(DateTime now, DateTime deadline)
+    {
+        return Math.Max(0, unchecked((int)Math.Ceiling((deadline - now).TotalMilliseconds)));
     }
 }

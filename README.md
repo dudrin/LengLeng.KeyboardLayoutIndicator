@@ -69,7 +69,7 @@ Recommended defaults are stored in `appsettings.json`:
 
 ```json
 {
-  "settingsSchemaVersion": 7,
+  "settingsSchemaVersion": 8,
   "englishScrollLockState": "Off",
   "indicatorKey": "CapsLock",
   "englishIndicatorState": "Preserve",
@@ -80,6 +80,7 @@ Recommended defaults are stored in `appsettings.json`:
   "indicatorOffBlinkLitMs": 120,
   "indicatorOffBlinkDarkMs": 650,
   "layoutPollIntervalMs": 50,
+  "layoutFallbackPollIntervalMs": 1000,
   "serviceSessionPollIntervalMs": 5000,
   "treatUnknownLayoutAsEnglish": true,
   "consoleLayoutStrategy": "ForegroundThread",
@@ -108,6 +109,8 @@ Main parameters:
 - `englishLanguagePrefixes`: language prefixes treated as English. Usually `["en"]` is enough.
 - `indicatorOnBlinkLitMs` and `indicatorOnBlinkDarkMs`: non-English blinking pattern when the user's indicator state is on. The lit phase is longer than the dark phase.
 - `indicatorOffBlinkLitMs` and `indicatorOffBlinkDarkMs`: non-English blinking pattern when the user's indicator state is off. The dark phase is longer than the lit phase.
+- `layoutPollIntervalMs`: internal agent timer used for short pause checks and blinking. Layout reading is not done on every tick.
+- `layoutFallbackPollIntervalMs`: slow fallback layout read interval. The agent also refreshes immediately when the foreground window changes or physical keyboard input is detected.
 - `layoutDetectionStrategy`: `TrayIndicatorFirst` first reads the Windows tray input indicator and recognizes `ENG` by pixels for any active application. If the tray is unavailable, it falls back to the active window HKL. `ForegroundWindow` disables tray reading. `TrayIndicatorForConsole` is a fallback mode for selected console processes only.
 - `manualEnglishIndicatorRect` and `manualEnglishIndicatorTemplate`: filled automatically from the tray menu item `Указать область ENG мышью...`.
 - `manualEnglishIndicatorSearchRadiusPx`: search radius around the calibrated `ENG` tray indicator. The program searches the tray area because the indicator can move when new tray icons appear.
@@ -226,7 +229,7 @@ C:\ProgramData\LengLeng\KeyboardLayoutIndicator\logs\service.log
 
 ```json
 {
-  "settingsSchemaVersion": 7,
+  "settingsSchemaVersion": 8,
   "englishScrollLockState": "Off",
   "indicatorKey": "CapsLock",
   "englishIndicatorState": "Preserve",
@@ -237,6 +240,7 @@ C:\ProgramData\LengLeng\KeyboardLayoutIndicator\logs\service.log
   "indicatorOffBlinkLitMs": 120,
   "indicatorOffBlinkDarkMs": 650,
   "layoutPollIntervalMs": 50,
+  "layoutFallbackPollIntervalMs": 1000,
   "serviceSessionPollIntervalMs": 5000,
   "treatUnknownLayoutAsEnglish": true,
   "consoleLayoutStrategy": "ForegroundThread",
@@ -267,7 +271,8 @@ C:\ProgramData\LengLeng\KeyboardLayoutIndicator\logs\service.log
 - `blinkIntervalMs`: старый общий интервал мигания для совместимости.
 - `indicatorOnBlinkLitMs` и `indicatorOnBlinkDarkMs`: мигание для неанглийской раскладки, когда пользовательское состояние индикатора включено. Свет горит дольше, чем пауза.
 - `indicatorOffBlinkLitMs` и `indicatorOffBlinkDarkMs`: мигание для неанглийской раскладки, когда пользовательское состояние индикатора выключено. Пауза дольше, чем свет.
-- `layoutPollIntervalMs`: частота проверки раскладки. Рекомендовано `50`.
+- `layoutPollIntervalMs`: внутренний таймер агента для коротких пауз и мигания. Раскладка не читается на каждом тике.
+- `layoutFallbackPollIntervalMs`: редкая резервная проверка раскладки. Дополнительно агент перечитывает раскладку сразу при смене активного окна или физическом вводе с клавиатуры.
 - `serviceSessionPollIntervalMs`: как часто служба проверяет активные пользовательские сессии.
 - `treatUnknownLayoutAsEnglish`: если активное окно недоступно, не мигать.
 - `consoleLayoutStrategy`: стратегия для консольных окон. `ForegroundThread` не ломает английскую раскладку в Far. `PreferNonEnglishProcessThread` может помочь с русской раскладкой в Far, но у Far иногда остаются старые русские HKL в фоновых потоках, поэтому английская раскладка может ошибочно мигать.

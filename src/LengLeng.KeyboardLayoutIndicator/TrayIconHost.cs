@@ -10,6 +10,7 @@ internal sealed class TrayIconHost : IDisposable
     private readonly Func<bool> _beforePhysicalKeyDown;
     private readonly Action _afterPhysicalKeyUp;
     private readonly Action<uint> _beforePhysicalNonIndicatorKeyDown;
+    private readonly Action _requestLayoutRefresh;
     private readonly ManualResetEventSlim _ready = new(false);
     private Thread? _thread;
     private TrayIconContext? _context;
@@ -19,12 +20,14 @@ internal sealed class TrayIconHost : IDisposable
         string settingsPath,
         Func<bool> beforePhysicalKeyDown,
         Action afterPhysicalKeyUp,
-        Action<uint> beforePhysicalNonIndicatorKeyDown)
+        Action<uint> beforePhysicalNonIndicatorKeyDown,
+        Action requestLayoutRefresh)
     {
         _settingsPath = settingsPath;
         _beforePhysicalKeyDown = beforePhysicalKeyDown;
         _afterPhysicalKeyUp = afterPhysicalKeyUp;
         _beforePhysicalNonIndicatorKeyDown = beforePhysicalNonIndicatorKeyDown;
+        _requestLayoutRefresh = requestLayoutRefresh;
     }
 
     public void Start()
@@ -89,7 +92,8 @@ internal sealed class TrayIconHost : IDisposable
                 _settingsPath,
                 _beforePhysicalKeyDown,
                 _afterPhysicalKeyUp,
-                _beforePhysicalNonIndicatorKeyDown);
+                _beforePhysicalNonIndicatorKeyDown,
+                _requestLayoutRefresh);
             _ready.Set();
             Application.Run(_context);
         }
@@ -134,6 +138,8 @@ internal sealed class TrayIconHost : IDisposable
         private readonly string _settingsPath;
         private readonly NotifyIcon _notifyIcon;
         private readonly LockKeyUserInputHook _keyboardHook;
+        private readonly ForegroundWindowWatcher _foregroundWindowWatcher;
+        private readonly Action _requestLayoutRefresh;
         private Icon? _currentIcon;
         private LayoutSnapshot _layout = LayoutSnapshot.Unknown;
         private bool _isEnglish = true;
@@ -145,9 +151,11 @@ internal sealed class TrayIconHost : IDisposable
             string settingsPath,
             Func<bool> beforePhysicalKeyDown,
             Action afterPhysicalKeyUp,
-            Action<uint> beforePhysicalNonIndicatorKeyDown)
+            Action<uint> beforePhysicalNonIndicatorKeyDown,
+            Action requestLayoutRefresh)
         {
             _settingsPath = settingsPath;
+            _requestLayoutRefresh = requestLayoutRefresh;
             _notifyIcon = new NotifyIcon
             {
                 Visible = true,
@@ -162,6 +170,10 @@ internal sealed class TrayIconHost : IDisposable
                 BeforePhysicalNonIndicatorKeyDown = beforePhysicalNonIndicatorKeyDown
             };
             _keyboardHook.Start();
+
+            _foregroundWindowWatcher = new ForegroundWindowWatcher(requestLayoutRefresh);
+            _foregroundWindowWatcher.Start();
+
             RefreshIcon();
         }
 
@@ -200,6 +212,7 @@ internal sealed class TrayIconHost : IDisposable
         {
             if (disposing)
             {
+                _foregroundWindowWatcher.Dispose();
                 _keyboardHook.Dispose();
                 _notifyIcon.Visible = false;
                 _notifyIcon.Dispose();
@@ -319,6 +332,7 @@ internal sealed class TrayIconHost : IDisposable
             var settings = SettingsStore.LoadOrCreate(_settingsPath);
             update(settings);
             SettingsStore.Save(_settingsPath, settings);
+            _requestLayoutRefresh();
             _notifyIcon.ContextMenuStrip = BuildMenu();
         }
 
