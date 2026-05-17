@@ -22,7 +22,7 @@ internal sealed class KeyboardLayoutReader
             var trayLayout = _trayInputIndicatorReader.GetCurrentLayout(settings);
             if (trayLayout.IsKnown)
             {
-                return Remember(trayLayout);
+                return Remember(RefineTrayLayout(trayLayout, settings));
             }
         }
 
@@ -77,6 +77,71 @@ internal sealed class KeyboardLayoutReader
         }
 
         return primaryLayout.IsKnown ? Remember(primaryLayout) : LastKnownOrUnknown();
+    }
+
+    private LayoutSnapshot RefineTrayLayout(LayoutSnapshot trayLayout, IndicatorSettings? settings)
+    {
+        if (!IsGenericTrayNonEnglishLayout(trayLayout))
+        {
+            return trayLayout;
+        }
+
+        var systemInputMethodLayout = _systemInputMethodLanguageReader.GetCurrentLayout();
+        if (IsSpecificNonEnglishLayout(systemInputMethodLayout, settings))
+        {
+            return systemInputMethodLayout;
+        }
+
+        var foregroundWindow = GetForegroundWindow();
+        if (foregroundWindow == 0)
+        {
+            return trayLayout;
+        }
+
+        var threadId = GetWindowThreadProcessId(foregroundWindow, out var processId);
+        if (threadId == 0)
+        {
+            return trayLayout;
+        }
+
+        var primaryLayout = FromKeyboardLayout(GetKeyboardLayout(threadId));
+        if (IsSpecificNonEnglishLayout(primaryLayout, settings))
+        {
+            return primaryLayout;
+        }
+
+        if (IsConsoleWindow(foregroundWindow))
+        {
+            var consoleLayout = TryGetConsoleProcessLayout(processId, settings);
+            if (IsSpecificNonEnglishLayout(consoleLayout, settings))
+            {
+                return consoleLayout;
+            }
+        }
+
+        return trayLayout;
+    }
+
+    private static bool IsGenericTrayNonEnglishLayout(LayoutSnapshot layout)
+    {
+        return layout.IsKnown
+            && string.Equals(layout.CultureName, "tray-non-english", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(layout.TwoLetterLanguageName, "other", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsSpecificNonEnglishLayout(LayoutSnapshot layout, IndicatorSettings? settings)
+    {
+        if (!layout.IsKnown || IsGenericTrayNonEnglishLayout(layout))
+        {
+            return false;
+        }
+
+        if (settings is not null)
+        {
+            return !settings.IsEnglish(layout);
+        }
+
+        return !string.Equals(layout.TwoLetterLanguageName, "en", StringComparison.OrdinalIgnoreCase);
     }
 
     private LayoutSnapshot Remember(LayoutSnapshot layout)
