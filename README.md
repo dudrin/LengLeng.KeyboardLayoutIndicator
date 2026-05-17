@@ -69,7 +69,7 @@ Recommended defaults are stored in `appsettings.json`:
 
 ```json
 {
-  "settingsSchemaVersion": 8,
+  "settingsSchemaVersion": 9,
   "englishScrollLockState": "Off",
   "indicatorKey": "CapsLock",
   "englishIndicatorState": "Preserve",
@@ -91,6 +91,9 @@ Recommended defaults are stored in `appsettings.json`:
   "pauseIndicatorWhileTyping": true,
   "typingPauseMs": 700,
   "pauseIndicatorWhileMouseOverTaskbar": true,
+  "pauseIndicatorWhileProtectedWindowActive": true,
+  "showLayoutOverlayForProtectedWindows": true,
+  "layoutOverlayDurationMs": 1400,
   "taskbarPreviewHoverBandPx": 280,
   "taskbarHoverReleasePauseMs": 700,
   "restoreInitialScrollLockStateOnExit": true,
@@ -116,6 +119,9 @@ Main parameters:
 - `manualEnglishIndicatorSearchRadiusPx`: search radius around the calibrated `ENG` tray indicator. The program searches the tray area because the indicator can move when new tray icons appear.
 - `pauseIndicatorWhileTyping`: when real typing is detected, the selected Lock key is immediately restored to the remembered user state and blinking is temporarily paused.
 - `pauseIndicatorWhileMouseOverTaskbar`: pauses all indicator output while the mouse is over the taskbar or taskbar thumbnail preview area.
+- `pauseIndicatorWhileProtectedWindowActive`: pauses Lock-key output while an elevated/protected foreground window blocks synthetic input.
+- `showLayoutOverlayForProtectedWindows`: shows a short layout label over the protected foreground window when LED output is paused there.
+- `layoutOverlayDurationMs`: how long that protected-window layout label stays visible.
 - `taskbarPreviewHoverBandPx`: height of the preview area above the taskbar. Default: `280`.
 - `restoreInitialScrollLockStateOnExit`: restores the remembered user state of the selected Lock key when the agent stops.
 - `logLayoutChanges`: writes layout changes to the log.
@@ -229,7 +235,7 @@ C:\ProgramData\LengLeng\KeyboardLayoutIndicator\logs\service.log
 
 ```json
 {
-  "settingsSchemaVersion": 8,
+  "settingsSchemaVersion": 9,
   "englishScrollLockState": "Off",
   "indicatorKey": "CapsLock",
   "englishIndicatorState": "Preserve",
@@ -251,6 +257,9 @@ C:\ProgramData\LengLeng\KeyboardLayoutIndicator\logs\service.log
   "pauseIndicatorWhileTyping": true,
   "typingPauseMs": 700,
   "pauseIndicatorWhileMouseOverTaskbar": true,
+  "pauseIndicatorWhileProtectedWindowActive": true,
+  "showLayoutOverlayForProtectedWindows": true,
+  "layoutOverlayDurationMs": 1400,
   "taskbarPreviewHoverBandPx": 280,
   "taskbarHoverReleasePauseMs": 700,
   "restoreInitialScrollLockStateOnExit": true,
@@ -285,6 +294,9 @@ C:\ProgramData\LengLeng\KeyboardLayoutIndicator\logs\service.log
 - `pauseIndicatorWhileTyping`: при реальной печати сразу возвращать выбранный Lock-индикатор в запомненное пользовательское состояние и временно останавливать мигание.
 - `typingPauseMs`: сколько миллисекунд держать паузу мигания после последнего нажатия клавиши.
 - `pauseIndicatorWhileMouseOverTaskbar`: приостанавливать индикацию, когда курсор находится над панелью задач или областью миниатюр открытых окон.
+- `pauseIndicatorWhileProtectedWindowActive`: приостанавливать отправку Lock-клавиши, когда активное окно с повышенными правами блокирует синтетический ввод.
+- `showLayoutOverlayForProtectedWindows`: показывать короткую надпись с раскладкой поверх защищенного активного окна, когда LED-индикация там приостановлена.
+- `layoutOverlayDurationMs`: сколько миллисекунд держать эту надпись на экране.
 - `taskbarPreviewHoverBandPx`: высота зоны над панелью задач, где ожидаются миниатюры окон. Рекомендовано `280`.
 - `taskbarHoverReleasePauseMs`: дополнительная пауза после ухода курсора из зоны панели задач/миниатюр.
 - `restoreInitialScrollLockStateOnExit`: вернуть запомненное пользовательское состояние выбранной Lock-клавиши при остановке агента.

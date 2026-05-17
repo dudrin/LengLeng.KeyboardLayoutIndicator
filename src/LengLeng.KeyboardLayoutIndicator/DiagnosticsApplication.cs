@@ -11,6 +11,7 @@ internal static class DiagnosticsApplication
         var trayLayout = new TrayInputIndicatorReader().GetCurrentLayout(settings);
         var indicatorController = new ScrollLockController(settings.IndicatorKey);
         var indicatorOn = indicatorController.GetState();
+        var foregroundWindow = ForegroundWindowInspector.GetCurrent();
         var mouseOverTaskbarOrPreview =
             new TaskbarHoverDetector().IsCursorOverTaskbarOrPreview(settings.TaskbarPreviewHoverBandPx);
 
@@ -31,6 +32,10 @@ internal static class DiagnosticsApplication
         Console.WriteLine($"Pause while typing: {settings.PauseIndicatorWhileTyping}");
         Console.WriteLine($"Typing pause: {settings.TypingPauseMs} ms");
         Console.WriteLine($"Pause while mouse over taskbar: {settings.PauseIndicatorWhileMouseOverTaskbar}");
+        Console.WriteLine($"Pause while protected window active: {settings.PauseIndicatorWhileProtectedWindowActive}");
+        Console.WriteLine($"Show protected window layout overlay: {settings.ShowLayoutOverlayForProtectedWindows}");
+        Console.WriteLine($"Layout overlay duration: {settings.LayoutOverlayDurationMs} ms");
+        Console.WriteLine($"Foreground window blocks lower integrity input: {foregroundWindow.BlocksLowerIntegrityInput}");
         Console.WriteLine($"Taskbar preview hover band: {settings.TaskbarPreviewHoverBandPx} px");
         Console.WriteLine($"Taskbar hover release pause: {settings.TaskbarHoverReleasePauseMs} ms");
         Console.WriteLine($"Mouse over taskbar or previews: {mouseOverTaskbarOrPreview}");

@@ -4,7 +4,7 @@ namespace LengLeng.KeyboardLayoutIndicator;
 
 internal sealed class IndicatorSettings
 {
-    public const int CurrentSchemaVersion = 8;
+    public const int CurrentSchemaVersion = 9;
 
     [JsonPropertyName("settingsSchemaVersion")]
     public int SettingsSchemaVersion { get; set; } = CurrentSchemaVersion;
@@ -71,6 +71,15 @@ internal sealed class IndicatorSettings
 
     [JsonPropertyName("pauseIndicatorWhileMouseOverTaskbar")]
     public bool PauseIndicatorWhileMouseOverTaskbar { get; set; } = true;
+
+    [JsonPropertyName("pauseIndicatorWhileProtectedWindowActive")]
+    public bool PauseIndicatorWhileProtectedWindowActive { get; set; } = true;
+
+    [JsonPropertyName("showLayoutOverlayForProtectedWindows")]
+    public bool ShowLayoutOverlayForProtectedWindows { get; set; } = true;
+
+    [JsonPropertyName("layoutOverlayDurationMs")]
+    public int LayoutOverlayDurationMs { get; set; } = 1400;
 
     [JsonPropertyName("taskbarPreviewHoverBandPx")]
     public int TaskbarPreviewHoverBandPx { get; set; } = 280;
@@ -159,6 +168,7 @@ internal sealed class IndicatorSettings
         ServiceSessionPollIntervalMs = Math.Clamp(ServiceSessionPollIntervalMs, 1000, 60000);
         ModifierReleasePauseMs = Math.Clamp(ModifierReleasePauseMs, 0, 2000);
         TypingPauseMs = Math.Clamp(TypingPauseMs, 100, 5000);
+        LayoutOverlayDurationMs = Math.Clamp(LayoutOverlayDurationMs, 300, 5000);
         TaskbarPreviewHoverBandPx = Math.Clamp(TaskbarPreviewHoverBandPx, 0, 800);
         TaskbarHoverReleasePauseMs = Math.Clamp(TaskbarHoverReleasePauseMs, 0, 5000);
 

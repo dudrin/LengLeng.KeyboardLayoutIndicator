@@ -7,6 +7,7 @@ internal sealed class ScrollLockController
     private const int InputKeyboard = 1;
     private const uint KeyEventKeyUp = 0x0002;
     private readonly ushort _virtualKey;
+    private DateTime _nextSendInputFailureLogUtc = DateTime.MinValue;
 
     public ScrollLockController()
         : this(LockKeyCatalog.ScrollLock)
@@ -89,9 +90,15 @@ internal sealed class ScrollLockController
             return true;
         }
 
-        FileLog.Write(
-            "agent",
-            $"{DisplayName} SendInput failed. Sent {sent}/{inputs.Length}. Win32 error {Marshal.GetLastWin32Error()}.");
+        var now = DateTime.UtcNow;
+        if (now >= _nextSendInputFailureLogUtc)
+        {
+            _nextSendInputFailureLogUtc = now.AddSeconds(5);
+            FileLog.Write(
+                "agent",
+                $"{DisplayName} SendInput failed. Sent {sent}/{inputs.Length}. Win32 error {Marshal.GetLastWin32Error()}.");
+        }
+
         return false;
     }
 

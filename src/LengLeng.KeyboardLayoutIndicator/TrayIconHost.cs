@@ -52,14 +52,22 @@ internal sealed class TrayIconHost : IDisposable
         bool isEnglish,
         string indicatorKey,
         bool userIndicatorState,
-        bool actualIndicatorState)
+        bool actualIndicatorState,
+        ForegroundWindowSnapshot foregroundWindow,
+        bool indicatorOutputPaused,
+        bool showLayoutOverlayForProtectedWindows,
+        int layoutOverlayDurationMs)
     {
         Post(context => context.UpdateStatus(
             layout,
             isEnglish,
             indicatorKey,
             userIndicatorState,
-            actualIndicatorState));
+            actualIndicatorState,
+            foregroundWindow,
+            indicatorOutputPaused,
+            showLayoutOverlayForProtectedWindows,
+            layoutOverlayDurationMs));
     }
 
     public void Dispose()
@@ -140,12 +148,16 @@ internal sealed class TrayIconHost : IDisposable
         private readonly LockKeyUserInputHook _keyboardHook;
         private readonly ForegroundWindowWatcher _foregroundWindowWatcher;
         private readonly Action _requestLayoutRefresh;
+        private readonly LayoutOverlayWindow _layoutOverlayWindow;
         private Icon? _currentIcon;
         private LayoutSnapshot _layout = LayoutSnapshot.Unknown;
         private bool _isEnglish = true;
         private string _indicatorKey = LockKeyCatalog.CapsLock;
         private bool _userIndicatorState;
         private bool _actualIndicatorState;
+        private nint _lastOverlayWindow;
+        private string _lastOverlayText = string.Empty;
+        private DateTime _nextOverlayAllowedUtc = DateTime.MinValue;
 
         public TrayIconContext(
             string settingsPath,
@@ -174,6 +186,8 @@ internal sealed class TrayIconHost : IDisposable
             _foregroundWindowWatcher = new ForegroundWindowWatcher(requestLayoutRefresh);
             _foregroundWindowWatcher.Start();
 
+            _layoutOverlayWindow = new LayoutOverlayWindow();
+
             RefreshIcon();
         }
 
@@ -187,7 +201,11 @@ internal sealed class TrayIconHost : IDisposable
             bool isEnglish,
             string indicatorKey,
             bool userIndicatorState,
-            bool actualIndicatorState)
+            bool actualIndicatorState,
+            ForegroundWindowSnapshot foregroundWindow,
+            bool indicatorOutputPaused,
+            bool showLayoutOverlayForProtectedWindows,
+            int layoutOverlayDurationMs)
         {
             var keyChanged = !string.Equals(_indicatorKey, indicatorKey, StringComparison.OrdinalIgnoreCase);
             var languageChanged = _isEnglish != isEnglish;
@@ -206,6 +224,15 @@ internal sealed class TrayIconHost : IDisposable
             var tooltip =
                 $"{(_isEnglish ? "ENG" : "OTHER")} | {LockKeyCatalog.GetDisplayName(_indicatorKey)} {(_actualIndicatorState ? "On" : "Off")}";
             _notifyIcon.Text = tooltip.Length > 63 ? tooltip[..63] : tooltip;
+
+            MaybeShowProtectedWindowOverlay(
+                layout,
+                isEnglish,
+                foregroundWindow,
+                indicatorOutputPaused,
+                showLayoutOverlayForProtectedWindows,
+                layoutOverlayDurationMs,
+                languageChanged);
         }
 
         protected override void Dispose(bool disposing)
@@ -214,6 +241,7 @@ internal sealed class TrayIconHost : IDisposable
             {
                 _foregroundWindowWatcher.Dispose();
                 _keyboardHook.Dispose();
+                _layoutOverlayWindow.Dispose();
                 _notifyIcon.Visible = false;
                 _notifyIcon.Dispose();
                 _currentIcon?.Dispose();
@@ -425,6 +453,55 @@ internal sealed class TrayIconHost : IDisposable
             _currentIcon = TrayIconRenderer.CreateIcon(_isEnglish, _indicatorKey);
             _notifyIcon.Icon = _currentIcon;
             previous?.Dispose();
+        }
+
+        private void MaybeShowProtectedWindowOverlay(
+            LayoutSnapshot layout,
+            bool isEnglish,
+            ForegroundWindowSnapshot foregroundWindow,
+            bool indicatorOutputPaused,
+            bool showLayoutOverlayForProtectedWindows,
+            int layoutOverlayDurationMs,
+            bool languageChanged)
+        {
+            if (!showLayoutOverlayForProtectedWindows
+                || !indicatorOutputPaused
+                || foregroundWindow.Handle == 0
+                || foregroundWindow.Bounds.IsEmpty)
+            {
+                return;
+            }
+
+            var text = FormatOverlayText(layout, isEnglish);
+            var now = DateTime.UtcNow;
+            var activatedProtectedWindow = foregroundWindow.Handle != _lastOverlayWindow;
+            var textChanged = !string.Equals(_lastOverlayText, text, StringComparison.OrdinalIgnoreCase);
+            if (!activatedProtectedWindow && !languageChanged && !textChanged && now < _nextOverlayAllowedUtc)
+            {
+                return;
+            }
+
+            _lastOverlayWindow = foregroundWindow.Handle;
+            _lastOverlayText = text;
+            _nextOverlayAllowedUtc = now.AddMilliseconds(layoutOverlayDurationMs + 600);
+            _layoutOverlayWindow.ShowLayout(text, foregroundWindow.Bounds, layoutOverlayDurationMs);
+        }
+
+        private static string FormatOverlayText(LayoutSnapshot layout, bool isEnglish)
+        {
+            if (isEnglish)
+            {
+                return "ENG";
+            }
+
+            if (layout.IsKnown
+                && !string.IsNullOrWhiteSpace(layout.TwoLetterLanguageName)
+                && !string.Equals(layout.TwoLetterLanguageName, "other", StringComparison.OrdinalIgnoreCase))
+            {
+                return layout.TwoLetterLanguageName.ToUpperInvariant();
+            }
+
+            return "OTHER";
         }
     }
 }

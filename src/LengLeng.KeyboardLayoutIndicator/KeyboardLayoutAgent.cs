@@ -77,6 +77,9 @@ internal sealed class KeyboardLayoutAgent
 
                 var layout = _currentLayout;
                 var isEnglish = _currentLayoutIsEnglish;
+                var foregroundWindow = ForegroundWindowInspector.GetCurrent();
+                var protectedWindowPauseActive = _settings.PauseIndicatorWhileProtectedWindowActive
+                    && foregroundWindow.BlocksLowerIntegrityInput;
                 UpdatePhysicalIndicatorKeyState(now);
 
                 if (_settings.PauseIndicatorWhileModifiersDown && KeyboardInputGuard.IsModifierDown())
@@ -93,8 +96,29 @@ internal sealed class KeyboardLayoutAgent
                         isEnglish,
                         _settings.IndicatorKey,
                         GetUserIndicatorState(),
-                        _indicatorController.GetState());
-                    WaitForNextTick(now, isEnglish, taskbarHoverPauseActive);
+                        _indicatorController.GetState(),
+                        foregroundWindow,
+                        false,
+                        _settings.ShowLayoutOverlayForProtectedWindows,
+                        _settings.LayoutOverlayDurationMs);
+                    WaitForNextTick(now, isEnglish, taskbarHoverPauseActive, false);
+                    continue;
+                }
+
+                if (protectedWindowPauseActive)
+                {
+                    _blinkInitialized = false;
+                    trayIcon.UpdateStatus(
+                        layout,
+                        isEnglish,
+                        _settings.IndicatorKey,
+                        GetUserIndicatorState(),
+                        _indicatorController.GetState(),
+                        foregroundWindow,
+                        true,
+                        _settings.ShowLayoutOverlayForProtectedWindows,
+                        _settings.LayoutOverlayDurationMs);
+                    WaitForNextTick(now, isEnglish, taskbarHoverPauseActive, true);
                     continue;
                 }
 
@@ -106,8 +130,12 @@ internal sealed class KeyboardLayoutAgent
                         isEnglish,
                         _settings.IndicatorKey,
                         GetUserIndicatorState(),
-                        _indicatorController.GetState());
-                    WaitForNextTick(now, isEnglish, taskbarHoverPauseActive);
+                        _indicatorController.GetState(),
+                        foregroundWindow,
+                        false,
+                        _settings.ShowLayoutOverlayForProtectedWindows,
+                        _settings.LayoutOverlayDurationMs);
+                    WaitForNextTick(now, isEnglish, taskbarHoverPauseActive, false);
                     continue;
                 }
 
@@ -125,9 +153,13 @@ internal sealed class KeyboardLayoutAgent
                     isEnglish,
                     _settings.IndicatorKey,
                     GetUserIndicatorState(),
-                    _indicatorController.GetState());
+                    _indicatorController.GetState(),
+                    foregroundWindow,
+                    false,
+                    _settings.ShowLayoutOverlayForProtectedWindows,
+                    _settings.LayoutOverlayDurationMs);
 
-                WaitForNextTick(now, isEnglish, taskbarHoverPauseActive);
+                WaitForNextTick(now, isEnglish, taskbarHoverPauseActive, false);
             }
         }
         finally
@@ -248,12 +280,17 @@ internal sealed class KeyboardLayoutAgent
             _suppressIndicatorOutputUntilUtc = DateTime.UtcNow.AddMilliseconds(600);
         }
 
-        _indicatorController.TrySetState(userIndicatorState);
+        var canSendIndicatorInput = CanSendIndicatorInput();
+        if (canSendIndicatorInput)
+        {
+            _indicatorController.TrySetState(userIndicatorState);
+        }
+
         FileLog.Write(
             "agent",
             $"{_indicatorController.DisplayName} user state changed to {(userIndicatorState ? "On" : "Off")}.");
         RequestLayoutRefresh();
-        return true;
+        return canSendIndicatorInput;
     }
 
     private void AfterPhysicalIndicatorKeyUp()
@@ -267,7 +304,11 @@ internal sealed class KeyboardLayoutAgent
             _suppressIndicatorOutputUntilUtc = DateTime.UtcNow.AddMilliseconds(600);
         }
 
-        _indicatorController.TrySetState(userIndicatorState);
+        if (CanSendIndicatorInput())
+        {
+            _indicatorController.TrySetState(userIndicatorState);
+        }
+
         RequestLayoutRefresh();
     }
 
@@ -290,7 +331,16 @@ internal sealed class KeyboardLayoutAgent
             userIndicatorState = _userIndicatorState;
         }
 
-        controller.TrySetState(userIndicatorState);
+        if (CanSendIndicatorInput())
+        {
+            controller.TrySetState(userIndicatorState);
+        }
+    }
+
+    private bool CanSendIndicatorInput()
+    {
+        return !_settings.PauseIndicatorWhileProtectedWindowActive
+            || !ForegroundWindowInspector.GetCurrent().BlocksLowerIntegrityInput;
     }
 
     private void RequestLayoutRefreshForKeyboardInput(uint virtualKey)
@@ -465,11 +515,20 @@ internal sealed class KeyboardLayoutAgent
         return File.Exists(AppPaths.AgentStopSignalPath);
     }
 
-    private void WaitForNextTick(DateTime now, bool isEnglish, bool taskbarHoverPauseActive)
+    private void WaitForNextTick(
+        DateTime now,
+        bool isEnglish,
+        bool taskbarHoverPauseActive,
+        bool indicatorOutputPaused)
     {
         var waitMs = isEnglish
             ? 250
             : GetNonEnglishWaitMilliseconds(now);
+
+        if (indicatorOutputPaused)
+        {
+            waitMs = 250;
+        }
 
         if (taskbarHoverPauseActive)
         {

@@ -77,6 +77,13 @@ internal static class SettingsStore
                     settings.LayoutFallbackPollIntervalMs = 1000;
                 }
 
+                if (previousSchemaVersion < 9)
+                {
+                    settings.PauseIndicatorWhileProtectedWindowActive = true;
+                    settings.ShowLayoutOverlayForProtectedWindows = true;
+                    settings.LayoutOverlayDurationMs = 1400;
+                }
+
                 if (string.Equals(
                     settings.LayoutDetectionStrategy,
                     "TrayIndicatorForConsole",
@@ -135,6 +142,9 @@ internal static class SettingsStore
             || !json.Contains("\"pauseIndicatorWhileTyping\"", StringComparison.OrdinalIgnoreCase)
             || !json.Contains("\"typingPauseMs\"", StringComparison.OrdinalIgnoreCase)
             || !json.Contains("\"pauseIndicatorWhileMouseOverTaskbar\"", StringComparison.OrdinalIgnoreCase)
+            || !json.Contains("\"pauseIndicatorWhileProtectedWindowActive\"", StringComparison.OrdinalIgnoreCase)
+            || !json.Contains("\"showLayoutOverlayForProtectedWindows\"", StringComparison.OrdinalIgnoreCase)
+            || !json.Contains("\"layoutOverlayDurationMs\"", StringComparison.OrdinalIgnoreCase)
             || !json.Contains("\"taskbarPreviewHoverBandPx\"", StringComparison.OrdinalIgnoreCase)
             || !json.Contains("\"taskbarHoverReleasePauseMs\"", StringComparison.OrdinalIgnoreCase)
             || !json.Contains("\"manualEnglishIndicatorSearchRadiusPx\"", StringComparison.OrdinalIgnoreCase)
