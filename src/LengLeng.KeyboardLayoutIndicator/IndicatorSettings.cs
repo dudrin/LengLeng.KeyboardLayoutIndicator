@@ -4,7 +4,7 @@ namespace LengLeng.KeyboardLayoutIndicator;
 
 internal sealed class IndicatorSettings
 {
-    public const int CurrentSchemaVersion = 6;
+    public const int CurrentSchemaVersion = 7;
 
     [JsonPropertyName("settingsSchemaVersion")]
     public int SettingsSchemaVersion { get; set; } = CurrentSchemaVersion;
@@ -86,6 +86,9 @@ internal sealed class IndicatorSettings
 
     [JsonPropertyName("manualEnglishIndicatorTemplate")]
     public string[]? ManualEnglishIndicatorTemplate { get; set; }
+
+    [JsonPropertyName("manualEnglishIndicatorSearchRadiusPx")]
+    public int ManualEnglishIndicatorSearchRadiusPx { get; set; } = 600;
 
     [JsonIgnore]
     public bool EnglishScrollLockOn =>
@@ -190,6 +193,8 @@ internal sealed class IndicatorSettings
         {
             ManualEnglishIndicatorTemplate = null;
         }
+
+        ManualEnglishIndicatorSearchRadiusPx = Math.Clamp(ManualEnglishIndicatorSearchRadiusPx, 120, 2000);
     }
 
     [JsonIgnore]

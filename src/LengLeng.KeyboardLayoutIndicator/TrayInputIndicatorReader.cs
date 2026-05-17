@@ -13,8 +13,12 @@ internal sealed class TrayInputIndicatorReader
     private const int MinimumTextPixels = 20;
     private const double MinimumEnglishScore = 0.74;
     private const double MinimumManualEnglishScore = 0.62;
+    private const double MinimumManualSearchEnglishScore = 0.70;
     private const int Srccopy = 0x00CC0020;
     private const int Captureblt = 0x40000000;
+    private const int ManualSearchStepPx = 3;
+
+    private Rectangle? _lastManualIndicatorRectangle;
 
     private static readonly string[] EnglishTemplate =
     {
@@ -76,7 +80,7 @@ internal sealed class TrayInputIndicatorReader
         return true;
     }
 
-    private static bool TryReadManualLayout(IndicatorSettings? settings, out LayoutSnapshot layout)
+    private bool TryReadManualLayout(IndicatorSettings? settings, out LayoutSnapshot layout)
     {
         layout = LayoutSnapshot.Unknown;
         if (settings?.ManualEnglishIndicatorRect is null
@@ -92,29 +96,55 @@ internal sealed class TrayInputIndicatorReader
             return false;
         }
 
-        var pixels = CaptureScreen(rectangle.Left, rectangle.Top, rectangle.Width, rectangle.Height);
-        if (pixels.Length == 0)
+        var indicatorWindow = FindInputIndicatorButton();
+        if (indicatorWindow != 0
+            && GetWindowRect(indicatorWindow, out var inputIndicatorRect)
+            && TryClassifyRectangle(
+                inputIndicatorRect.ToRectangle(),
+                settings.ManualEnglishIndicatorTemplate,
+                MinimumManualEnglishScore,
+                out layout,
+                out _))
         {
-            return false;
+            if (settings.IsEnglish(layout))
+            {
+                _lastManualIndicatorRectangle = inputIndicatorRect.ToRectangle();
+            }
+
+            return true;
         }
 
-        var mask = BuildTextMask(
-            pixels,
-            rectangle.Width,
-            rectangle.Height,
-            out var bounds,
-            out var textPixelCount);
-        if (textPixelCount < MinimumTextPixels || bounds == PixelBounds.Empty)
+        if (_lastManualIndicatorRectangle is { } lastRectangle
+            && TryClassifyRectangle(
+                lastRectangle,
+                settings.ManualEnglishIndicatorTemplate,
+                MinimumManualEnglishScore,
+                out layout,
+                out var lastScore)
+            && lastScore >= MinimumManualEnglishScore)
         {
-            return false;
+            return true;
         }
 
-        var normalized = NormalizeMask(mask, rectangle.Width, bounds);
-        var englishScore = Score(settings.ManualEnglishIndicatorTemplate, normalized);
-        layout = englishScore >= MinimumManualEnglishScore
-            ? new LayoutSnapshot(true, "en-US", "en", 0x0409, 0)
-            : new LayoutSnapshot(true, "tray-non-english", "other", 0, 0);
-        return true;
+        if (TryFindManualEnglishTemplate(settings, rectangle, out var matchRectangle, out var bestScore))
+        {
+            _lastManualIndicatorRectangle = matchRectangle;
+            layout = new LayoutSnapshot(true, "en-US", "en", 0x0409, 0);
+            return true;
+        }
+
+        if (bestScore >= 0)
+        {
+            layout = new LayoutSnapshot(true, "tray-non-english", "other", 0, 0);
+            return true;
+        }
+
+        return TryClassifyRectangle(
+            rectangle,
+            settings.ManualEnglishIndicatorTemplate,
+            MinimumManualEnglishScore,
+            out layout,
+            out _);
     }
 
     private static LayoutSnapshot GetCurrentLayoutFromSystemTray()
@@ -149,6 +179,284 @@ internal sealed class TrayInputIndicatorReader
         return englishScore >= MinimumEnglishScore
             ? new LayoutSnapshot(true, "en-US", "en", 0x0409, 0)
             : new LayoutSnapshot(true, "tray-non-english", "other", 0, 0);
+    }
+
+    private static bool TryClassifyRectangle(
+        Rectangle rectangle,
+        string[] template,
+        double minimumEnglishScore,
+        out LayoutSnapshot layout,
+        out double englishScore)
+    {
+        layout = LayoutSnapshot.Unknown;
+        englishScore = -1;
+
+        if (rectangle.Width < 8 || rectangle.Height < 8)
+        {
+            return false;
+        }
+
+        var pixels = CaptureScreen(rectangle.Left, rectangle.Top, rectangle.Width, rectangle.Height);
+        if (pixels.Length == 0)
+        {
+            return false;
+        }
+
+        var mask = BuildTextMask(
+            pixels,
+            rectangle.Width,
+            rectangle.Height,
+            out var bounds,
+            out var textPixelCount);
+        if (textPixelCount < MinimumTextPixels || bounds == PixelBounds.Empty)
+        {
+            return false;
+        }
+
+        var normalized = NormalizeMask(mask, rectangle.Width, bounds);
+        englishScore = Score(template, normalized);
+        layout = englishScore >= minimumEnglishScore
+            ? new LayoutSnapshot(true, "en-US", "en", 0x0409, 0)
+            : new LayoutSnapshot(true, "tray-non-english", "other", 0, 0);
+        return true;
+    }
+
+    private static bool TryFindManualEnglishTemplate(
+        IndicatorSettings settings,
+        Rectangle originalRectangle,
+        out Rectangle matchRectangle,
+        out double bestScore)
+    {
+        matchRectangle = Rectangle.Empty;
+        bestScore = -1;
+
+        if (settings.ManualEnglishIndicatorTemplate is null)
+        {
+            return false;
+        }
+
+        foreach (var searchRectangle in EnumerateManualSearchRectangles(
+            originalRectangle,
+            settings.ManualEnglishIndicatorSearchRadiusPx))
+        {
+            if (TryFindManualEnglishTemplateInRectangle(
+                searchRectangle,
+                originalRectangle.Size,
+                settings.ManualEnglishIndicatorTemplate,
+                out var currentMatch,
+                out var currentScore))
+            {
+                if (currentScore > bestScore)
+                {
+                    bestScore = currentScore;
+                    matchRectangle = currentMatch;
+                }
+            }
+            else if (currentScore > bestScore)
+            {
+                bestScore = currentScore;
+            }
+        }
+
+        return bestScore >= MinimumManualSearchEnglishScore;
+    }
+
+    private static bool TryFindManualEnglishTemplateInRectangle(
+        Rectangle searchRectangle,
+        Size candidateSize,
+        string[] template,
+        out Rectangle matchRectangle,
+        out double bestScore)
+    {
+        matchRectangle = Rectangle.Empty;
+        bestScore = -1;
+
+        searchRectangle = NormalizeSearchRectangle(searchRectangle, candidateSize);
+        if (searchRectangle.Width < candidateSize.Width || searchRectangle.Height < candidateSize.Height)
+        {
+            return false;
+        }
+
+        var pixels = CaptureScreen(
+            searchRectangle.Left,
+            searchRectangle.Top,
+            searchRectangle.Width,
+            searchRectangle.Height);
+        if (pixels.Length == 0)
+        {
+            return false;
+        }
+
+        for (var y = 0; y <= searchRectangle.Height - candidateSize.Height; y += ManualSearchStepPx)
+        {
+            for (var x = 0; x <= searchRectangle.Width - candidateSize.Width; x += ManualSearchStepPx)
+            {
+                if (!TryNormalizeCandidate(
+                    pixels,
+                    searchRectangle.Width,
+                    x,
+                    y,
+                    candidateSize.Width,
+                    candidateSize.Height,
+                    out var normalized))
+                {
+                    continue;
+                }
+
+                var score = Score(template, normalized);
+                if (score <= bestScore)
+                {
+                    continue;
+                }
+
+                bestScore = score;
+                matchRectangle = new Rectangle(
+                    searchRectangle.Left + x,
+                    searchRectangle.Top + y,
+                    candidateSize.Width,
+                    candidateSize.Height);
+            }
+        }
+
+        return bestScore >= MinimumManualSearchEnglishScore;
+    }
+
+    private static bool TryNormalizeCandidate(
+        byte[] sourcePixels,
+        int sourceWidth,
+        int sourceX,
+        int sourceY,
+        int width,
+        int height,
+        out bool[] normalized)
+    {
+        normalized = Array.Empty<bool>();
+        var candidatePixels = new byte[width * height * 4];
+
+        for (var y = 0; y < height; y++)
+        {
+            Buffer.BlockCopy(
+                sourcePixels,
+                ((sourceY + y) * sourceWidth + sourceX) * 4,
+                candidatePixels,
+                y * width * 4,
+                width * 4);
+        }
+
+        var mask = BuildTextMask(
+            candidatePixels,
+            width,
+            height,
+            out var bounds,
+            out var textPixelCount);
+        if (textPixelCount < MinimumTextPixels || bounds == PixelBounds.Empty)
+        {
+            return false;
+        }
+
+        normalized = NormalizeMask(mask, width, bounds);
+        return true;
+    }
+
+    private static IEnumerable<Rectangle> EnumerateManualSearchRectangles(
+        Rectangle originalRectangle,
+        int searchRadius)
+    {
+        var rectangles = new List<Rectangle>();
+
+        foreach (var trayWindow in EnumerateTrayWindows())
+        {
+            if (GetWindowRect(trayWindow, out var trayRect))
+            {
+                rectangles.Add(ExpandAroundOriginal(
+                    trayRect.ToRectangle(),
+                    originalRectangle,
+                    searchRadius));
+            }
+
+            EnumChildWindows(
+                trayWindow,
+                (childWindow, _) =>
+                {
+                    var className = GetWindowClassName(childWindow);
+                    if ((string.Equals(className, "TrayNotifyWnd", StringComparison.Ordinal)
+                            || string.Equals(className, "InputIndicatorButton", StringComparison.Ordinal))
+                        && IsWindowVisible(childWindow)
+                        && GetWindowRect(childWindow, out var childRect))
+                    {
+                        rectangles.Add(InflateRectangle(childRect.ToRectangle(), searchRadius / 3, 12));
+                    }
+
+                    return true;
+                },
+                0);
+        }
+
+        rectangles.Add(InflateRectangle(originalRectangle, searchRadius, 40));
+
+        return rectangles
+            .Select(rectangle => NormalizeSearchRectangle(rectangle, originalRectangle.Size))
+            .Where(rectangle => rectangle.Width >= originalRectangle.Width
+                && rectangle.Height >= originalRectangle.Height)
+            .Distinct()
+            .ToArray();
+    }
+
+    private static Rectangle ExpandAroundOriginal(
+        Rectangle trayRectangle,
+        Rectangle originalRectangle,
+        int searchRadius)
+    {
+        if (trayRectangle.Width >= trayRectangle.Height)
+        {
+            return Rectangle.FromLTRB(
+                Math.Max(trayRectangle.Left, originalRectangle.Left - searchRadius),
+                trayRectangle.Top,
+                Math.Min(trayRectangle.Right, originalRectangle.Right + searchRadius),
+                trayRectangle.Bottom);
+        }
+
+        return Rectangle.FromLTRB(
+            trayRectangle.Left,
+            Math.Max(trayRectangle.Top, originalRectangle.Top - searchRadius),
+            trayRectangle.Right,
+            Math.Min(trayRectangle.Bottom, originalRectangle.Bottom + searchRadius));
+    }
+
+    private static Rectangle NormalizeSearchRectangle(Rectangle rectangle, Size candidateSize)
+    {
+        return Rectangle.FromLTRB(
+            rectangle.Left,
+            rectangle.Top,
+            Math.Max(rectangle.Right, rectangle.Left + candidateSize.Width),
+            Math.Max(rectangle.Bottom, rectangle.Top + candidateSize.Height));
+    }
+
+    private static Rectangle InflateRectangle(Rectangle rectangle, int width, int height)
+    {
+        rectangle.Inflate(width, height);
+        return rectangle;
+    }
+
+    private static IEnumerable<nint> EnumerateTrayWindows()
+    {
+        var trayWindows = new List<nint>();
+        EnumWindows(
+            (window, _) =>
+            {
+                var className = GetWindowClassName(window);
+                if ((string.Equals(className, "Shell_TrayWnd", StringComparison.Ordinal)
+                        || string.Equals(className, "Shell_SecondaryTrayWnd", StringComparison.Ordinal))
+                    && IsWindowVisible(window))
+                {
+                    trayWindows.Add(window);
+                }
+
+                return true;
+            },
+            0);
+
+        return trayWindows;
     }
 
     private static nint FindInputIndicatorButton()
@@ -419,6 +727,9 @@ internal sealed class TrayInputIndicatorReader
     private static extern nint FindWindow(string className, string? windowName);
 
     [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumChildProc callback, nint parameter);
+
+    [DllImport("user32.dll")]
     private static extern bool EnumChildWindows(nint parent, EnumChildProc callback, nint parameter);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -489,6 +800,11 @@ internal sealed class TrayInputIndicatorReader
         public int Top;
         public int Right;
         public int Bottom;
+
+        public Rectangle ToRectangle()
+        {
+            return Rectangle.FromLTRB(Left, Top, Right, Bottom);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]

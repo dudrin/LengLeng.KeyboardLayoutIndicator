@@ -69,7 +69,7 @@ Recommended defaults are stored in `appsettings.json`:
 
 ```json
 {
-  "settingsSchemaVersion": 6,
+  "settingsSchemaVersion": 7,
   "englishScrollLockState": "Off",
   "indicatorKey": "CapsLock",
   "englishIndicatorState": "Preserve",
@@ -95,7 +95,8 @@ Recommended defaults are stored in `appsettings.json`:
   "restoreInitialScrollLockStateOnExit": true,
   "logLayoutChanges": true,
   "manualEnglishIndicatorRect": null,
-  "manualEnglishIndicatorTemplate": null
+  "manualEnglishIndicatorTemplate": null,
+  "manualEnglishIndicatorSearchRadiusPx": 600
 }
 ```
 
@@ -109,6 +110,7 @@ Main parameters:
 - `indicatorOffBlinkLitMs` and `indicatorOffBlinkDarkMs`: non-English blinking pattern when the user's indicator state is off. The dark phase is longer than the lit phase.
 - `layoutDetectionStrategy`: `TrayIndicatorFirst` first reads the Windows tray input indicator and recognizes `ENG` by pixels for any active application. If the tray is unavailable, it falls back to the active window HKL. `ForegroundWindow` disables tray reading. `TrayIndicatorForConsole` is a fallback mode for selected console processes only.
 - `manualEnglishIndicatorRect` and `manualEnglishIndicatorTemplate`: filled automatically from the tray menu item `Указать область ENG мышью...`.
+- `manualEnglishIndicatorSearchRadiusPx`: search radius around the calibrated `ENG` tray indicator. The program searches the tray area because the indicator can move when new tray icons appear.
 - `pauseIndicatorWhileTyping`: when real typing is detected, the selected Lock key is immediately restored to the remembered user state and blinking is temporarily paused.
 - `pauseIndicatorWhileMouseOverTaskbar`: pauses all indicator output while the mouse is over the taskbar or taskbar thumbnail preview area.
 - `taskbarPreviewHoverBandPx`: height of the preview area above the taskbar. Default: `280`.
@@ -224,7 +226,7 @@ C:\ProgramData\LengLeng\KeyboardLayoutIndicator\logs\service.log
 
 ```json
 {
-  "settingsSchemaVersion": 6,
+  "settingsSchemaVersion": 7,
   "englishScrollLockState": "Off",
   "indicatorKey": "CapsLock",
   "englishIndicatorState": "Preserve",
@@ -250,7 +252,8 @@ C:\ProgramData\LengLeng\KeyboardLayoutIndicator\logs\service.log
   "restoreInitialScrollLockStateOnExit": true,
   "logLayoutChanges": true,
   "manualEnglishIndicatorRect": null,
-  "manualEnglishIndicatorTemplate": null
+  "manualEnglishIndicatorTemplate": null,
+  "manualEnglishIndicatorSearchRadiusPx": 600
 }
 ```
 
@@ -271,6 +274,7 @@ C:\ProgramData\LengLeng\KeyboardLayoutIndicator\logs\service.log
 - `layoutDetectionStrategy`: `TrayIndicatorFirst` сначала читает область индикатора раскладки в трее и распознаёт `ENG` по пикселям для любого активного приложения. Если трэй недоступен, используется HKL активного окна. `ForegroundWindow` полностью отключает чтение трея. `TrayIndicatorForConsole` оставлен как запасной режим только для выбранных консольных процессов.
 - `trayIndicatorConsoleProcessNames`: имена консольных процессов для режима `TrayIndicatorForConsole`. В рекомендованном режиме `TrayIndicatorFirst` этот список игнорируется.
 - `manualEnglishIndicatorRect` и `manualEnglishIndicatorTemplate`: заполняются автоматически из меню трея `Указать область ENG мышью...`.
+- `manualEnglishIndicatorSearchRadiusPx`: радиус поиска вокруг откалиброванного значка `ENG`. Программа ищет шаблон по области трея, потому что значок раскладки может сдвигаться при появлении новых значков.
 - `pauseIndicatorWhileModifiersDown`: приостанавливать отправку выбранной Lock-клавиши, пока нажаты `Alt`, `Shift`, `Ctrl` или `Win`.
 - `modifierReleasePauseMs`: пауза после отпускания модификаторов, чтобы не мешать переключению раскладки.
 - `pauseIndicatorWhileTyping`: при реальной печати сразу возвращать выбранный Lock-индикатор в запомненное пользовательское состояние и временно останавливать мигание.

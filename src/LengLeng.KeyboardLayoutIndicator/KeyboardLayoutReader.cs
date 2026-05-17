@@ -13,6 +13,7 @@ internal sealed class KeyboardLayoutReader
     private static readonly HashSet<uint> LoggedConsoleInspectionFailures = new();
     private readonly SystemInputMethodLanguageReader _systemInputMethodLanguageReader = new();
     private readonly TrayInputIndicatorReader _trayInputIndicatorReader = new();
+    private LayoutSnapshot _lastKnownLayout = LayoutSnapshot.Unknown;
 
     public LayoutSnapshot GetForegroundLayout(IndicatorSettings? settings = null)
     {
@@ -21,7 +22,7 @@ internal sealed class KeyboardLayoutReader
             var trayLayout = _trayInputIndicatorReader.GetCurrentLayout(settings);
             if (trayLayout.IsKnown)
             {
-                return trayLayout;
+                return Remember(trayLayout);
             }
         }
 
@@ -30,20 +31,20 @@ internal sealed class KeyboardLayoutReader
             var systemInputMethodLayout = _systemInputMethodLanguageReader.GetCurrentLayout();
             if (systemInputMethodLayout.IsKnown)
             {
-                return systemInputMethodLayout;
+                return Remember(systemInputMethodLayout);
             }
         }
 
         var foregroundWindow = GetForegroundWindow();
         if (foregroundWindow == 0)
         {
-            return LayoutSnapshot.Unknown;
+            return LastKnownOrUnknown();
         }
 
         var threadId = GetWindowThreadProcessId(foregroundWindow, out var processId);
         if (threadId == 0)
         {
-            return LayoutSnapshot.Unknown;
+            return LastKnownOrUnknown();
         }
 
         var keyboardLayout = GetKeyboardLayout(threadId);
@@ -57,13 +58,13 @@ internal sealed class KeyboardLayoutReader
             var trayLayout = _trayInputIndicatorReader.GetCurrentLayout(settings);
             if (trayLayout.IsKnown)
             {
-                return trayLayout;
+                return Remember(trayLayout);
             }
         }
 
         if (primaryLayout.IsKnown && !isConsoleWindow)
         {
-            return primaryLayout;
+            return Remember(primaryLayout);
         }
 
         if (isConsoleWindow && settings?.PreferNonEnglishConsoleProcessThread == true)
@@ -71,11 +72,26 @@ internal sealed class KeyboardLayoutReader
             var consoleLayout = TryGetConsoleProcessLayout(processId, settings);
             if (consoleLayout.IsKnown)
             {
-                return consoleLayout;
+                return Remember(consoleLayout);
             }
         }
 
-        return primaryLayout;
+        return primaryLayout.IsKnown ? Remember(primaryLayout) : LastKnownOrUnknown();
+    }
+
+    private LayoutSnapshot Remember(LayoutSnapshot layout)
+    {
+        if (layout.IsKnown)
+        {
+            _lastKnownLayout = layout;
+        }
+
+        return layout;
+    }
+
+    private LayoutSnapshot LastKnownOrUnknown()
+    {
+        return _lastKnownLayout.IsKnown ? _lastKnownLayout : LayoutSnapshot.Unknown;
     }
 
     private static bool ShouldUseTrayIndicatorForConsoleProcess(uint processId, IndicatorSettings settings)

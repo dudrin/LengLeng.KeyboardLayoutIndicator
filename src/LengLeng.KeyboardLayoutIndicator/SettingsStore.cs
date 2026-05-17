@@ -67,6 +67,11 @@ internal static class SettingsStore
                     settings.TaskbarHoverReleasePauseMs = 700;
                 }
 
+                if (previousSchemaVersion < 7)
+                {
+                    settings.ManualEnglishIndicatorSearchRadiusPx = 600;
+                }
+
                 if (string.Equals(
                     settings.LayoutDetectionStrategy,
                     "TrayIndicatorForConsole",
@@ -126,6 +131,7 @@ internal static class SettingsStore
             || !json.Contains("\"pauseIndicatorWhileMouseOverTaskbar\"", StringComparison.OrdinalIgnoreCase)
             || !json.Contains("\"taskbarPreviewHoverBandPx\"", StringComparison.OrdinalIgnoreCase)
             || !json.Contains("\"taskbarHoverReleasePauseMs\"", StringComparison.OrdinalIgnoreCase)
+            || !json.Contains("\"manualEnglishIndicatorSearchRadiusPx\"", StringComparison.OrdinalIgnoreCase)
             || json.Contains("SystemInputMethodFirst", StringComparison.OrdinalIgnoreCase)
             || json.Contains("\"PreferNonEnglishConsoleProcessThread\"", StringComparison.OrdinalIgnoreCase)
             || json.Contains("\"UseSystemInputMethodFirst\"", StringComparison.OrdinalIgnoreCase)

@@ -32,6 +32,7 @@ internal static class DiagnosticsApplication
         Console.WriteLine($"Taskbar preview hover band: {settings.TaskbarPreviewHoverBandPx} px");
         Console.WriteLine($"Taskbar hover release pause: {settings.TaskbarHoverReleasePauseMs} ms");
         Console.WriteLine($"Mouse over taskbar or previews: {mouseOverTaskbarOrPreview}");
+        Console.WriteLine($"Manual ENG search radius: {settings.ManualEnglishIndicatorSearchRadiusPx} px");
         Console.WriteLine($"Current layout: {layout.DisplayName}");
         Console.WriteLine($"Current layout is English: {settings.IsEnglish(layout)}");
         Console.WriteLine($"Tray indicator layout: {trayLayout.DisplayName}");
