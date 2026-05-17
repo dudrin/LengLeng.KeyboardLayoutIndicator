@@ -157,7 +157,6 @@ internal sealed class TrayIconHost : IDisposable
         private bool _actualIndicatorState;
         private nint _lastOverlayWindow;
         private string _lastOverlayText = string.Empty;
-        private DateTime _nextOverlayAllowedUtc = DateTime.MinValue;
 
         public TrayIconContext(
             string settingsPath,
@@ -473,17 +472,15 @@ internal sealed class TrayIconHost : IDisposable
             }
 
             var text = FormatOverlayText(layout, isEnglish);
-            var now = DateTime.UtcNow;
             var activatedProtectedWindow = foregroundWindow.Handle != _lastOverlayWindow;
             var textChanged = !string.Equals(_lastOverlayText, text, StringComparison.OrdinalIgnoreCase);
-            if (!activatedProtectedWindow && !languageChanged && !textChanged && now < _nextOverlayAllowedUtc)
+            if (!activatedProtectedWindow && !languageChanged && !textChanged)
             {
                 return;
             }
 
             _lastOverlayWindow = foregroundWindow.Handle;
             _lastOverlayText = text;
-            _nextOverlayAllowedUtc = now.AddMilliseconds(layoutOverlayDurationMs + 600);
             _layoutOverlayWindow.ShowLayout(text, foregroundWindow.Bounds, layoutOverlayDurationMs);
         }
 
